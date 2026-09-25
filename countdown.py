@@ -1,0 +1,106 @@
+import csv 
+import datetime 
+import sqlite3
+from typing import Annotated, Optional 
+import typer 
+from rich.console import Console 
+from rich.table import Table 
+
+from rich import box 
+
+
+DB_PATH = "countdown.db"
+app=typer.Typer() 
+console = Console()
+
+def check_table_exists(table_name):
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (table_name,)
+        )
+        if cursor.fetchone() is None:
+            console.print(f"[yellow]Table '{table_name}' does not exist. Creating it now...[/yellow]")
+            cursor.execute(
+                f"""CREATE TABLE {table_name} (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    date DATE NOT NULL,
+                    priority BOOLEAN NOT NULL,
+                    is_private BOOLEAN NOT NULL
+                );"""
+            )
+            conn.commit()
+        cursor.close()
+
+        
+
+    
+
+@app.command("list")
+def list_events(private: Annotated[bool, typer.Option("--private")] = False):
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        query = "SELECT id, name, date, priority, is_private FROM events"
+        
+        if not private:
+            query += " WHERE is_private = 0"
+
+        cursor.execute(query)
+        events = cursor.fetchall()
+        cursor.close()
+        table = Table(title="Events", box=box.ROUNDED)
+        table.add_column("ID", justify="right", style="cyan", no_wrap=True)
+        table.add_column("Name", style="magenta")
+        table.add_column("Date", style="green")
+        table.add_column("Priority", style="yellow")
+        table.add_column("Private", style="red")
+        table.add_column("Days Left", style="blue")
+
+        for event in events:
+            event_id, name, date_str, priority, is_private = event
+            date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+            days_left = (date - datetime.date.today()).days
+            table.add_row(
+                str(event_id),
+                name,
+                date_str,
+                "Yes" if priority else "No",
+                "Yes" if is_private else "No",
+                str(days_left),
+            )   
+
+        console.print(table)
+
+       
+
+@app.command("import")
+def import_event(
+    file_path: Annotated[str, typer.Argument()],
+    skip_header: Annotated[bool, typer.Option("--skip-header")] = True,
+):
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        event_count = 0
+        with open(file_path, "r") as csvfile:
+            reader = csv.reader(csvfile)
+            if skip_header:
+                next(reader)  # Skip the header row
+            for row in reader:
+                
+                cursor.execute(
+                    """
+                     INSERT INTO events (id,name, date, priority,is_private) 
+                    VALUES (?, ?, ?, ?, ?) """,
+                    (int(row[0]),row[1], row[2], bool(int(row[3])), int(row[4])),
+                )
+                event_count += 1
+
+        conn.commit()
+        cursor.close()
+        console.print(f"[green]Successfully imported {event_count} events from {file_path}[/green]")
+
+
+if __name__ == "__main__":
+    check_table_exists("events")
+    app()
