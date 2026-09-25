@@ -1,15 +1,34 @@
 import csv 
 import datetime 
 import sqlite3
-from typing import Annotated, Optional 
+from typing import Annotated, List, Optional
 import typer 
 from rich.console import Console 
 from rich.table import Table 
-
+from dataclasses import dataclass
 from rich import box 
 
 
 DB_PATH = "countdown.db"
+
+@dataclass
+class Event:
+    id: int
+    name: str
+    date: str
+    priority: bool
+    is_private: bool
+
+def event_from_row(_,row):
+
+    return Event(
+        id=row[0],
+        name=row[1],
+        date=row[2],
+        priority=bool(row[3]),
+        is_private=bool(row[4]),
+    )
+
 app=typer.Typer() 
 console = Console()
 
@@ -40,7 +59,7 @@ def check_table_exists(table_name):
 @app.command("list")
 def list_events(private: Annotated[bool, typer.Option("--private")] = False):
     with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+        conn.row_factory = event_from_row
         cursor = conn.cursor()
         query = "SELECT id, name, date, priority, is_private FROM events"
         
@@ -48,7 +67,8 @@ def list_events(private: Annotated[bool, typer.Option("--private")] = False):
             query += " WHERE is_private = 0"
 
         cursor.execute(query)
-        events = cursor.fetchall()
+
+        events: List[Event] = cursor.fetchall()
         cursor.close()
         table = Table(title="Events", box=box.ROUNDED)
         table.add_column("ID", justify="right", style="cyan", no_wrap=True)
@@ -59,7 +79,7 @@ def list_events(private: Annotated[bool, typer.Option("--private")] = False):
         table.add_column("Days Left", style="blue")
 
         for event in events:
-            event_date = datetime.datetime.strptime(event["date"], "%Y-%m-%d").date()
+            event_date = datetime.datetime.strptime(event.date, "%Y-%m-%d").date()
             days_left = (event_date - datetime.date.today()).days
             if days_left < 0:
                msg = f"[red]{abs(days_left)} days ago[/red]"
@@ -68,11 +88,11 @@ def list_events(private: Annotated[bool, typer.Option("--private")] = False):
             else:
                 msg = f"[green]{days_left} days left[/green]"
             table.add_row(
-                str(event["id"]),
-                event["name"],
-                event["date"],
-                "Yes" if event["priority"] else "No",
-                "Yes" if event["is_private"] else "No",
+                str(event.id),
+                event.name,
+                event.date,
+                "Yes" if event.priority else "No",
+                "Yes" if event.is_private else "No",
                 msg,)
 
         console.print(table)
