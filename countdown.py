@@ -40,7 +40,6 @@ def check_table_exists(table_name):
 @app.command("list")
 def list_events(private: Annotated[bool, typer.Option("--private")] = False):
     with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         query = "SELECT id, name, date, priority, is_private FROM events"
         
@@ -59,21 +58,17 @@ def list_events(private: Annotated[bool, typer.Option("--private")] = False):
         table.add_column("Days Left", style="blue")
 
         for event in events:
-            event_date = datetime.datetime.strptime(event["date"], "%Y-%m-%d").date()
-            days_left = (event_date - datetime.date.today()).days
-            if days_left < 0:
-               msg = f"[red]{abs(days_left)} days ago[/red]"
-            elif days_left == 0:
-                msg = "[yellow]Today[/yellow]"
-            else:
-                msg = f"[green]{days_left} days left[/green]"
+            event_id, name, date_str, priority, is_private = event
+            date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+            days_left = (date - datetime.date.today()).days
             table.add_row(
-                str(event["id"]),
-                event["name"],
-                event["date"],
-                "Yes" if event["priority"] else "No",
-                "Yes" if event["is_private"] else "No",
-                msg,)
+                str(event_id),
+                name,
+                date_str,
+                "Yes" if priority else "No",
+                "Yes" if is_private else "No",
+                str(days_left),
+            )   
 
         console.print(table)
 
