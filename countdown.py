@@ -33,7 +33,7 @@ def check_table_exists(table_name):
             conn.commit()
         cursor.close()
 
-        
+
 
     
 
@@ -73,6 +73,44 @@ def list_events(private: Annotated[bool, typer.Option("--private")] = False):
         console.print(table)
 
        
+@app.command("update")
+def update_event(
+    id: Annotated[int, typer.Argument()],
+    name: Annotated[Optional[str], typer.Option("--name")] = None,
+    date: Annotated[Optional[str], typer.Option("--date")] = None,
+    priority: Annotated[Optional[int], typer.Option("--priority")] = None,
+    is_private: Annotated[Optional[bool], typer.Option("--is-private")] = None,):
+
+    values = []
+    fields = []
+
+    if name is not None:
+        fields.append("name = ?")
+        values.append(name)
+
+    if date is not None:
+        fields.append("date = ?")
+        values.append(date)
+
+    if priority is not None:
+        fields.append("priority = ?")
+        values.append(priority)
+
+    if is_private is not None:
+        fields.append("is_private = ?")
+        values.append(is_private)   
+
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        if fields:
+            values.append(id)
+            query = f"UPDATE events SET {', '.join(fields)} WHERE id = ?"
+            cursor.execute(query, values)
+            conn.commit()
+            console.print(f"[green]Event with ID {id} updated successfully.[/green]")
+        else:
+            console.print(f"[yellow]No fields to update for event with ID {id}.[/yellow]")
+        cursor.close()
 
 @app.command("import")
 def import_event(
